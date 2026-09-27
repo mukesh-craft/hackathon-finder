@@ -12,8 +12,8 @@
  * These are different values for roughly half of the live catalogue, so the
  * adapter maps each to its own field and never substitutes one for the other.
  */
-import type { RawHackathon, ExtractedDate, Confidence, SourceId } from '@hf/shared';
-import { parseDateExpression } from '@hf/shared';
+import type { DeadlineConflict, RawHackathon, ExtractedDate, Confidence, SourceId } from '@hf/shared';
+import { extractDeadlinesFromText, parseDateExpression, SOURCE_TRUST } from '@hf/shared';
 import { stripHtml } from './html.js';
 import { safeFetchJson } from '../http/safe-fetch.js';
 import { config } from '../config.js';
@@ -134,6 +134,43 @@ function prizeTotal(prizes: UnstopPrize[] | null | undefined): {
   return { amount: total, currency, details: breakdown || null };
 }
 
+const PRIZE_CURRENCIES: Record<string, string> = { '₹': 'INR', $: 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY' };
+const PRIZE_UNITS: Record<string, number> = { k: 1_000, thousand: 1_000, lakh: 100_000, lacs: 100_000, crore: 10_000_000, crores: 10_000_000, m: 1_000_000, million: 1_000_000 };
+
+/**
+ * Last-resort prize reader for listings whose structured prizes are empty but
+ * whose description states an amount ("₹25,000 Cash Prize Pool", "prizes worth
+ * $5,000", "1 lakh in prizes"). Requires a prize word NEAR the amount so a
+ * stray fee or date never becomes a prize.
+ */
+export function prizeFromText(text: string | null): { amount: number; currency: string | null; text: string } | null {
+  if (!text) return null;
+  const patterns = [
+    /(?<word>prize\s*(?:pool|amount|money|fund)?|cash\s*prize|winnings?|worth)\b[^₹$€£\d]{0,50}(?<symbol>[₹$€£])\s?(?<digits>[\d,]+(?:\.\d+)?)\s?(?<unit>lakhs?|crores?|thousand|million|[kKmM])?/i,
+    /(?<symbol>[₹$€£])\s?(?<digits>[\d,]+(?:\.\d+)?)\s?(?<unit>lakhs?|crores?|thousand|million|[kKmM])?\b[^₹$€£.]{0,50}\b(?<word>prize\s*(?:pool|amount|money)?|cash\s*prize|winnings?)\b/i,
+  ];
+  for (const re of patterns) {
+    const m = re.exec(text);
+    if (!m?.groups) continue;
+    const symbol = m.groups.symbol ?? '';
+    const value = Number((m.groups.digits ?? '').replace(/,/g, ''));
+    const unit = (m.groups.unit ?? '').toLowerCase();
+    if (!Number.isFinite(value) || value <= 0) continue;
+    const amount = Math.round(value * (PRIZE_UNITS[unit] ?? 1));
+    return { amount, currency: PRIZE_CURRENCIES[symbol] ?? null, text: m[0].trim().slice(0, 160) };
+  }
+  return null;
+}
+
+/** True when two ISO instants differ by more than a day (either direction). */
+export function differsByMoreThanADay(aIso: string | null | undefined, bIso: string | null | undefined): boolean {
+  if (!aIso || !bIso) return false;
+  const a = new Date(aIso).getTime();
+  const b = new Date(bIso).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return false;
+  return Math.abs(a - b) > 86_400_000;
+}
+
 export function normalizeUnstopItem(item: UnstopItem): RawHackathon {
   const sourceUrl = cleanUrl(item.seo_url) ?? cleanUrl(item.public_url) ?? `https://unstop.com/hackathons/${item.id}`;
   const registrationUrl = cleanUrl(item.short_url) ?? sourceUrl;
@@ -158,6 +195,40 @@ export function normalizeUnstopItem(item: UnstopItem): RawHackathon {
     region === 'online' ? 'online' : region === 'offline' ? 'offline' : region === 'hybrid' ? 'hybrid' : 'unknown';
 
   const prize = prizeTotal(item.prizes);
+  const description = item.details ? stripHtml(item.details).slice(0, 6000) : null;
+
+  // --- Prize fallback: structured prizes are often empty while the ---------
+  // description states the amount in prose ("₹25,000 Cash Prize Pool").
+  // Only used when structured data is absent; always marked as text-derived.
+  const textPrize = prize.amount === null ? prizeFromText(description) : null;
+  const prizeAmount = prize.amount ?? textPrize?.amount ?? null;
+  const prizeCurrency = prize.currency ?? textPrize?.currency ?? null;
+  const prizeDetails = prize.details ?? textPrize?.text ?? null;
+
+  // --- Event dates from the organizer's own description text. --------------
+  // Unstop never publishes an event start; the description often does
+  // ("Date: 7–8 October 2026"). The structured end_date stays primary; when
+  // the text names a materially different end, both are preserved as a
+  // conflict instead of silently swapping one for the other.
+  const fieldConflicts: DeadlineConflict[] = [];
+  const textDates = description ? extractDeadlinesFromText(description, { assumeYear: new Date().getUTCFullYear() }) : [];
+  const textStart = textDates.find((d) => d.kind === 'hackathon_start' && d.iso) ?? null;
+  const textEnd = textDates.find((d) => d.kind === 'hackathon_end' && d.iso) ?? null;
+  const hackathonStart = textStart
+    ? { ...textStart, label: textStart.label ?? 'Event dates in description' }
+    : null;
+  if (hackathonEnd && textEnd && differsByMoreThanADay(hackathonEnd.iso, textEnd.iso)) {
+    fieldConflicts.push({
+      field: 'hackathon_end',
+      values: [
+        { value: hackathonEnd.iso as string, source: SOURCE, sourceUrl, trust: SOURCE_TRUST[SOURCE] ?? 0 },
+        { value: textEnd.iso as string, source: SOURCE, sourceUrl, trust: SOURCE_TRUST[SOURCE] ?? 0 },
+      ],
+      resolvedFrom: SOURCE,
+      resolutionNote:
+        'Unstop’s event-end field and the organizer’s description text name different dates. The structured field is shown; verify on the official page.',
+    });
+  }
   const eligible = eligibilityText(item.filters);
   const technologies = Array.from(
     new Set((item.required_skills ?? []).map((s) => s.skill).filter((s): s is string => Boolean(s))),
@@ -172,8 +243,6 @@ export function normalizeUnstopItem(item: UnstopItem): RawHackathon {
   let freeOrPaid: RawHackathon['freeOrPaid'] = 'unknown';
   if (fee !== null && fee > 0) freeOrPaid = 'paid';
   else if (item.isPaid === false) freeOrPaid = 'free';
-
-  const description = item.details ? stripHtml(item.details).slice(0, 6000) : null;
 
   const provenance: RawHackathon['provenance'] = [];
   const prov = (field: string, value: string | number | boolean | null | undefined, confidence: Confidence) => {
@@ -191,9 +260,12 @@ export function normalizeUnstopItem(item: UnstopItem): RawHackathon {
   prov('registration_deadline', registrationDeadline?.iso, 'verified');
   prov('registration_opens_at', registrationOpens?.iso, 'verified');
   prov('hackathon_end', hackathonEnd?.iso, 'source_confirmed');
+  prov('hackathon_start', hackathonStart?.iso, 'partially_verified');
+  prov('prize_amount', prizeAmount, textPrize ? 'partially_verified' : 'source_confirmed');
+  prov('prize_details', prizeDetails, textPrize ? 'partially_verified' : 'source_confirmed');
   prov('team_size_min', item.regnRequirements?.min_team_size, 'source_confirmed');
   prov('team_size_max', item.regnRequirements?.max_team_size, 'source_confirmed');
-  prov('prize_amount', prize.amount, 'source_confirmed');
+
   prov('registration_fee', fee, 'source_confirmed');
   prov('eligibility', eligible.join(', '), 'source_confirmed');
   prov('technologies', technologies.join(', '), 'source_confirmed');
@@ -215,7 +287,7 @@ export function normalizeUnstopItem(item: UnstopItem): RawHackathon {
     onlineOrOffline,
     registrationOpensAt: registrationOpens,
     registrationDeadline,
-    hackathonStart: null, // Unstop's list payload does not publish an event start date.
+    hackathonStart, // From the description text; the list payload publishes no event start.
     hackathonEnd,
     submissionDeadline: null,
     teamSizeMin: item.regnRequirements?.min_team_size ?? null,
@@ -223,14 +295,15 @@ export function normalizeUnstopItem(item: UnstopItem): RawHackathon {
     eligibility: eligible.length > 0 ? eligible.join(', ') : null,
     themes,
     technologies,
-    prizeAmount: prize.amount,
-    prizeCurrency: prize.currency,
-    prizeDetails: prize.details,
+    prizeAmount,
+    prizeCurrency,
+    prizeDetails,
     registrationFee: fee,
     registrationFeeCurrency: fee !== null ? 'INR' : null,
     freeOrPaid,
     sourceDeadlineText: item.regnRequirements?.end_regn_dt ?? null,
     provenance,
+    fieldConflicts,
     raw: item,
     retrievedAt,
   };

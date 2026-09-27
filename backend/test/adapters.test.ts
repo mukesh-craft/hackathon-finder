@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { normalizeUnstopItem } from '../src/adapters/unstop.js';
+import { normalizeUnstopItem, prizeFromText, differsByMoreThanADay } from '../src/adapters/unstop.js';
 import { normalizeDevpostHackathon } from '../src/adapters/devpost.js';
 import { extractDeadlinesFromText } from '@hf/shared';
 import { parseMlhSeasonPage, normalizeMlhEvent, type MlhEvent } from '../src/adapters/mlh.js';
@@ -74,8 +74,66 @@ describe('unstop adapter — the registration/event-end distinction', () => {
 
   it('does not invent an event start date Unstop does not publish', () => {
     for (const rec of byId.values()) {
-      expect(rec.hackathonStart).toBeNull();
+      // Structured start stays null; text-derived starts are ExtractedDates
+      // with real ISOs (confidence follows precision, as everywhere else).
+      if (rec.hackathonStart) {
+        expect(rec.hackathonStart.iso).toMatch(/^\d{4}-\d{2}-\d{2}/);
+        expect(rec.hackathonStart.confidence).not.toBe('verified');
+      }
     }
+  });
+
+  it('reads a prize stated only in the description text', () => {
+    const item = {
+      id: 999001,
+      title: 'Text Prize Fest',
+      details: '<p>Welcome.</p><p>Prizes &amp; Opportunities ₹25,000 Cash Prize Pool. Certificates for all.</p>',
+      organisation: { name: 'Test College' },
+      region: 'offline',
+      address_with_country_logo: { city: 'Chennai', state: 'Tamil Nadu', country: { name: 'India' } },
+    };
+    const rec = normalizeUnstopItem(item as never);
+    expect(rec.prizeAmount).toBe(25000);
+    expect(rec.prizeCurrency).toBe('INR');
+    expect(rec.provenance.find((x) => x.field === 'prize_amount')?.confidence).toBe('partially_verified');
+  });
+
+  it('never turns a fee or stray number into a prize', () => {
+    expect(prizeFromText('Entry fee ₹500. Contact us.')).toBeNull();
+    expect(prizeFromText('The event is on 29 Sep 2026.')).toBeNull();
+    expect(prizeFromText(null)).toBeNull();
+  });
+
+  it('reads lakh-scale prizes with units', () => {
+    expect(prizeFromText('Total prizes worth ₹2 lakh for winners')?.amount).toBe(200000);
+    expect(prizeFromText('Win $5,000 cash prize today')?.amount).toBe(5000);
+  });
+
+  it('flags structured-vs-description event-end disagreements instead of swapping', () => {
+    const item = {
+      id: 999002,
+      title: 'Date Clash Fest',
+      details: '<p>Event Details. Date: 7–8 October 2026. Venue: Hall.</p>',
+      organisation: { name: 'Test College' },
+      region: 'offline',
+      end_date: '2026-09-27T23:59:00+05:30',
+      address_with_country_logo: { city: 'Chennai', state: 'Tamil Nadu', country: { name: 'India' } },
+    };
+    const rec = normalizeUnstopItem(item as never);
+    // Structured stays primary…
+    expect(rec.hackathonEnd?.iso).toBe('2026-09-27T23:59:00+05:30');
+    // …start is filled from text…
+    expect(rec.hackathonStart?.iso).toBe('2026-10-07');
+    // …and the disagreement is preserved, not hidden.
+    const conflict = (rec.fieldConflicts ?? []).find((c) => c.field === 'hackathon_end');
+    expect(conflict).toBeDefined();
+    expect(conflict!.values.map((v) => v.value).sort()).toEqual(['2026-09-27T23:59:00+05:30', '2026-10-08']);
+  });
+
+  it('compares instants with a one-day tolerance', () => {
+    expect(differsByMoreThanADay('2026-09-27T23:59:00+05:30', '2026-09-28T12:00:00+05:30')).toBe(false);
+    expect(differsByMoreThanADay('2026-09-27T23:59:00+05:30', '2026-10-08')).toBe(true);
+    expect(differsByMoreThanADay(null, '2026-10-08')).toBe(false);
   });
 });
 

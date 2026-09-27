@@ -635,6 +635,17 @@ describe('Details timeline provenance', () => {
             dataQuality: 'verified', deadlineConflict: false, deadlineConflictDetail: null,
             sourceDeadlineText: null, lastVerifiedAt: new Date().toISOString(), nextVerificationAt: null,
             updatedAt: new Date().toISOString(), distanceKm: null, sources: [], provenance: [],
+            fieldConflicts: [
+              {
+                field: 'hackathon_end',
+                values: [
+                  { value: '2026-09-27T18:30:00+05:30', source: 'unstop', sourceUrl: 'https://unstop.com/x', trust: 4 },
+                  { value: '2026-10-08', source: 'unstop', sourceUrl: 'https://unstop.com/x', trust: 4 },
+                ],
+                resolvedFrom: 'unstop',
+                resolutionNote: 'structured vs text',
+              },
+            ],
           },
           provenance: [
             { field: 'registration_deadline', value: '2026-09-27T17:00:00+05:30', source: 'unstop', sourceUrl: 'https://unstop.com/x', retrievedAt: '', confidence: 'verified' },
@@ -657,6 +668,7 @@ describe('Details timeline provenance', () => {
     // Two close-but-distinct milestones, each naming the source that published it.
     expect(await screen.findByText('via unstop · verified')).toBeInTheDocument();
     expect(screen.getByText('via unstop · source confirmed')).toBeInTheDocument();
+    expect(screen.getByText(/event end differs between sources/i)).toBeInTheDocument();
   });
 });
 

@@ -57,6 +57,7 @@ interface HackathonRow {
   data_quality: string;
   deadline_conflict: boolean;
   deadline_conflict_detail: unknown;
+  field_conflicts: unknown;
   source_deadline_text: string | null;
   last_verified_at: Date | string;
   next_verification_at: Date | string | null;
@@ -91,7 +92,7 @@ const SELECT_COLUMNS = `  h.id, h.slug, h.title, h.description, h.organizer, h.s
   h.team_size_min, h.team_size_max, h.eligibility, h.themes, h.technologies,
   h.prize_amount, h.prize_currency, h.prize_details, h.free_or_paid,
   h.registration_fee, h.registration_fee_currency,
-  h.data_quality, h.deadline_conflict, h.deadline_conflict_detail, h.source_deadline_text,
+  h.data_quality, h.deadline_conflict, h.deadline_conflict_detail, h.field_conflicts, h.source_deadline_text,
   h.last_verified_at, h.next_verification_at, h.updated_at
 `;
 
@@ -575,6 +576,7 @@ export class SearchService {
       dataQuality: (row.data_quality as Hackathon['dataQuality']) ?? 'unknown',
       deadlineConflict: row.deadline_conflict,
       deadlineConflictDetail: (row.deadline_conflict_detail as Hackathon['deadlineConflictDetail']) ?? null,
+      fieldConflicts: (row.field_conflicts as Hackathon['fieldConflicts']) ?? null,
       sourceDeadlineText: row.source_deadline_text,
       lastVerifiedAt: toIso(row.last_verified_at) ?? '',
       nextVerificationAt: toIso(row.next_verification_at),

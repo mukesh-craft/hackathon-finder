@@ -259,6 +259,9 @@ describe('admin + seo', () => {
     // Real event with a working link, not a loading spinner.
     expect(res.body).toContain('API Chennai Sprint');
     expect(res.body).toContain('/hackathon/');
+    // Source wall clock (IST), never UTC-normalized.
+    expect(res.body).toContain('IST');
+    expect(res.body).not.toContain('06:29 PM');
     // …while still booting the SPA when JS runs.
     expect(res.body).toContain('type="module"');
   });

@@ -9,7 +9,7 @@
  */
 import type { Db } from '../db/client.js';
 import type { Hackathon } from '@hf/shared';
-import { countdownTo, formatDeadline } from '@hf/shared';
+import { countdownTo, formatSourceWallClock } from '@hf/shared';
 import { SearchService } from '../services/search.js';
 import { popularCities } from '@hf/shared';
 
@@ -61,10 +61,8 @@ function deadlineLine(h: Hackathon, now: Date): string {
   if (!h.registrationDeadline) {
     return '<strong>Not specified</strong>';
   }
-  const formatted = formatDeadline(h.registrationDeadline, {
-    timeZone: 'UTC',
-    sourceTimezoneLabel: h.registrationDeadlineTimezone,
-  });
+  // Source wall clock (IST stays IST) — never UTC-normalized.
+  const formatted = formatSourceWallClock(h.registrationDeadline, h.registrationDeadlineTimezone);
   const cd = countdownTo(h.registrationDeadline, now);
   const main =
     formatted.timeNotSpecified
@@ -102,6 +100,15 @@ function searchFormHtml(): string {
   </form>`;
 }
 
+/**
+ * When this HTML was rendered. Countdowns inside are frozen at that instant —
+ * saying so keeps a cached or JS-less page honest instead of silently stale.
+ */
+function freshnessNote(now: Date): string {
+  const stamp = Number.isNaN(now.getTime()) ? '' : now.toISOString();
+  return `<p class="muted freshness">Times shown as of ${esc(stamp)} — reload for live countdowns.</p>`;
+}
+
 /** Slug ("bangalore-urban") back to a display name; mirrors the client. */
 export function denormalizeSlug(slug: string): string {
   return slug
@@ -121,7 +128,8 @@ export async function renderHomeContent(db: Db, now = new Date()): Promise<strin
     <div class="search-box">${searchFormHtml()}</div>
     <div class="popular"><span>Popular:</span>${chips}</div></div>
     <div class="section-head"><h2>Open now</h2></div>
-    <div class="cards">${open.results.map((h) => cardHtml(h, now)).join('')}</div>`;
+    <div class="cards">${open.results.map((h) => cardHtml(h, now)).join('')}</div>
+    ${freshnessNote(now)}`;
 }
 
 export async function renderCityContent(
@@ -150,6 +158,6 @@ export async function renderCityContent(
       : '';
   return {
     title: city ? `Hackathons in ${result.city.name ?? city}` : 'Browse hackathons',
-    html: `<h1 style="font-size:1.35rem;margin:0.2rem 0 0.6rem">${heading}</h1>${notes}<div class="search-box">${searchFormHtml()}</div>${list}${online}`,
+    html: `<h1 style="font-size:1.35rem;margin:0.2rem 0 0.6rem">${heading}</h1>${notes}<div class="search-box">${searchFormHtml()}</div>${list}${online}${freshnessNote(now)}`,
   };
 }

@@ -181,4 +181,61 @@ describe('ingest — merge across sources', () => {
     expect(Number(rows.rows[0].n)).toBe(1);
     expect(rows.rows[0].description).toBe('updated description');
   });
+
+  it('carries adapter-found field conflicts through to the stored row', async () => {
+    const db = testDb();
+    const svc = new IngestService(db, { logger: silentLogger });
+    await svc.ingest(
+      base({
+        title: 'Clash Fest',
+        source: 'unstop',
+        sourceRecordId: 'clash-1',
+        city: 'Chennai',
+        country: 'India',
+        hackathonEnd: dated('2026-09-27T23:59:00+05:30', 'source_confirmed'),
+        fieldConflicts: [
+          {
+            field: 'hackathon_end',
+            values: [
+              { value: '2026-09-27T23:59:00+05:30', source: 'unstop', sourceUrl: 'https://unstop.com/x', trust: 4 },
+              { value: '2026-10-08', source: 'unstop', sourceUrl: 'https://unstop.com/x', trust: 4 },
+            ],
+            resolvedFrom: 'unstop',
+            resolutionNote: 'structured vs text',
+          },
+        ],
+      }),
+    );
+    const rows = await db.query<{ field_conflicts: Array<{ field: string }> | null }>(
+      'SELECT field_conflicts FROM hackathons WHERE title = $1',
+      ['Clash Fest'],
+    );
+    expect(rows.rows[0].field_conflicts?.map((c) => c.field)).toContain('hackathon_end');
+    // Re-ingest must not duplicate the conflict entry.
+    await svc.ingest(
+      base({
+        title: 'Clash Fest',
+        source: 'unstop',
+        sourceRecordId: 'clash-1',
+        city: 'Chennai',
+        country: 'India',
+        fieldConflicts: [
+          {
+            field: 'hackathon_end',
+            values: [
+              { value: '2026-09-27T23:59:00+05:30', source: 'unstop', sourceUrl: 'https://unstop.com/x', trust: 4 },
+              { value: '2026-10-08', source: 'unstop', sourceUrl: 'https://unstop.com/x', trust: 4 },
+            ],
+            resolvedFrom: 'unstop',
+            resolutionNote: 'structured vs text',
+          },
+        ],
+      }),
+    );
+    const again = await db.query<{ field_conflicts: Array<{ field: string }> | null }>(
+      'SELECT field_conflicts FROM hackathons WHERE title = $1',
+      ['Clash Fest'],
+    );
+    expect(again.rows[0].field_conflicts?.filter((c) => c.field === 'hackathon_end').length).toBe(1);
+  });
 });

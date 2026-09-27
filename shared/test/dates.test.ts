@@ -272,3 +272,59 @@ describe('formatDeadline', () => {
     expect(formatDeadline(null).main).toBe('Not specified');
   });
 });
+
+describe('extractDeadlinesFromText — event-date ranges', () => {
+  it('splits "Date: 7–8 October 2026" into event start and end', () => {
+    const found = extractDeadlinesFromText(
+      'Event Details Team Size: 4-6 Members Date: 7–8 October 2026 Duration: 24 Hours',
+      { assumeYear: 2026 },
+    );
+    expect(found.map((d) => [d.kind, d.iso])).toEqual([
+      ['hackathon_start', '2026-10-07'],
+      ['hackathon_end', '2026-10-08'],
+    ]);
+    expect(found[0].precision).toBe('date_only');
+    expect(found[0].confidence).toBe('partially_verified');
+  });
+
+  it('leaves a lone "Date: 5 Oct" unclassified rather than guessing start vs end', () => {
+    const found = extractDeadlinesFromText('Date: 5 Oct 2026', { assumeYear: 2026 });
+    expect(found.length).toBe(1);
+    expect(found[0].kind).toBe('unknown');
+  });
+
+  it('refuses cross-month ranges instead of inventing the start month', () => {
+    const found = extractDeadlinesFromText('Event dates: 30 Sep - 2 Oct 2026', { assumeYear: 2026 });
+    expect(found.every((d) => d.kind === 'unknown')).toBe(true);
+  });
+
+  it('does not treat deadline labels as event dates', () => {
+    const found = extractDeadlinesFromText('Registration closes 29–30 Sep 2026', { assumeYear: 2026 });
+    expect(found.some((d) => d.kind === 'hackathon_start')).toBe(false);
+  });
+});
+
+describe('formatSourceWallClock', () => {
+  it('renders the source wall clock, mapping +05:30 to IST', async () => {
+    const { formatSourceWallClock } = await import('../src/dates.js');
+    const f = formatSourceWallClock('2026-09-27T23:59:00+05:30', 'UTC+05:30');
+    expect(f.main).toBe('27 September 2026, 11:59 PM');
+    expect(f.timezoneLabel).toBe('IST');
+    expect(f.timeNotSpecified).toBe(false);
+  });
+
+  it('never UTC-normalizes: the same instant keeps its published wall time', async () => {
+    const { formatSourceWallClock } = await import('../src/dates.js');
+    // 18:29 UTC is 23:59 IST — the organizer wrote 23:59, so 23:59 it is.
+    const f = formatSourceWallClock('2026-09-27T18:29:00Z', 'UTC');
+    expect(f.main).toBe('27 September 2026, 06:29 PM');
+    expect(f.timezoneLabel).toBe('UTC');
+  });
+
+  it('says time-not-specified for bare dates', async () => {
+    const { formatSourceWallClock } = await import('../src/dates.js');
+    const f = formatSourceWallClock('2026-09-29', null);
+    expect(f.main).toContain('time not specified');
+    expect(f.timeNotSpecified).toBe(true);
+  });
+});

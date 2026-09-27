@@ -3,12 +3,20 @@ import * as cheerio from 'cheerio';
 
 const BLOCK_TAGS = 'script,style,noscript,template,svg,iframe';
 
+/** Block elements whose text must not glue together ("MembersDate:"). */
+const BLOCK_SEPARATORS = 'p, li, ul, ol, div, br, h1, h2, h3, h4, h5, h6, tr, td, th, section, article, header, footer, hr';
+
 /** Visible text from an HTML fragment, with collapsed whitespace. */
 export function stripHtml(html: string | null | undefined, maxLength = 20_000): string {
   if (!html) return '';
   try {
     const $ = cheerio.load(`<div>${html}</div>`, null, false);
     $(BLOCK_TAGS).remove();
+    // Separate block elements first: without this, "<li>A</li><li>B</li>"
+    // becomes "AB", fusing labels into their neighbours ("MembersDate:").
+    $(BLOCK_SEPARATORS).each((_, el) => {
+      $(el).after('\n');
+    });
     const text = $.root().text().replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
   } catch {

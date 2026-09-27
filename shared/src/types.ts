@@ -154,6 +154,12 @@ export interface RawHackathon {
   sourceDeadlineText?: string | null;
   /** Where each populated field came from. */
   provenance: FieldProvenance[];
+  /**
+   * Disagreements found inside this single source (e.g. a structured field vs
+   * the organizer's own description text). Merged with cross-source conflicts
+   * at ingest time.
+   */
+  fieldConflicts?: DeadlineConflict[];
   /** Raw payload retained for debugging and re-parsing. */
   raw?: unknown;
   /** Epoch ms the source was read. */
@@ -207,6 +213,8 @@ export interface Hackathon {
   dataQuality: DataQuality;
   deadlineConflict: boolean;
   deadlineConflictDetail: DeadlineConflict | null;
+  /** Non-deadline disagreements (event dates, titles…), within or across sources. */
+  fieldConflicts: DeadlineConflict[] | null;
   sourceDeadlineText: string | null;
   lastVerifiedAt: string;
   nextVerificationAt: string | null;

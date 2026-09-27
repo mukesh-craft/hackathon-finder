@@ -472,6 +472,28 @@ export function classifyLabel(label: string): { kind: DeadlineKind; ambiguous: b
 
 const LABEL_WINDOW = 90;
 
+/** Labels that talk about WHEN the event itself happens (not a milestone). */
+const EVENT_DATE_LABEL = /\b((event|hackathon)\s+dates?|dates?\s*:|save\s+the\s+date|mark\s+your\s+calendar|schedul\w*|happen\w*)/i;
+/** Milestone words that disqualify a label from being a plain event date. */
+const MILESTONE_LABEL = /\b(regist|appl|submit|submission|shortlist|result|winner|final|demo|idea|project|present|announce|open|close|deadline)\w*\b/i;
+
+/**
+ * Detect "7–8 October" style ranges: a day number + dash immediately before a
+ * matched date, in the same month. Returns the range start day or null.
+ * Cross-month ranges ("30 Sep – 2 Oct") are refused rather than guessed.
+ */
+function rangeStartDay(text: string, dateStart: number, month: number, year: number | null): { day: number; spanStart: number } | null {
+  const windowStart = Math.max(0, dateStart - 12);
+  const gap = text.slice(windowStart, dateStart);
+  const m = /([0-3]?\d)(?:st|nd|rd|th)?\s*[–—-]\s*$/.exec(gap);
+  if (!m) return null;
+  const day = Number(m[1]);
+  // The range start must be an earlier day of the SAME month (and a real date).
+  const endDay = Number(/([0-3]?\d)/.exec(text.slice(dateStart, dateStart + 4))?.[1] ?? NaN);
+  if (!Number.isInteger(day) || day >= endDay || year === null || !isValidYmd(year, month, day)) return null;
+  return { day, spanStart: windowStart + (m.index ?? 0) };
+}
+
 /**
  * Extract every date in `text` together with the lifecycle milestone it belongs to.
  * Looks backwards from each date for the nearest label; if nothing is found it
@@ -487,6 +509,32 @@ export function extractDeadlinesFromText(text: string, opts: ParseOptions = {}):
     const after = text.slice(parts.end, Math.min(text.length, parts.end + LABEL_WINDOW));
     const beforeText = before.split(/[\n\r;|]|\.{3,}/).pop() ?? '';
     const afterLine = after.split(/[\n\r;|]|\.{3,}/)[0] ?? '';
+    const labelWindow = `${beforeText} ${afterLine}`;
+
+    // Event-date ranges ("Date: 7–8 October 2026") name the event window, not
+    // a milestone. Split into start + end, both date-only. A lone "Date: 5
+    // Oct" stays unknown — a single date cannot tell start from end.
+    if (parts.year !== null && EVENT_DATE_LABEL.test(labelWindow) && !MILESTONE_LABEL.test(labelWindow)) {
+      const range = rangeStartDay(text, parts.start, parts.month, parts.year);
+      if (range) {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const startIso = `${parts.year}-${pad(parts.month)}-${pad(range.day)}`;
+        const label = beforeText.trim().slice(-70) || null;
+        results.push({
+          iso: startIso,
+          kind: 'hackathon_start',
+          precision: 'date_only',
+          sourceTimezone: null,
+          offsetMinutes: null,
+          raw: text.slice(range.spanStart, parts.end).trim(),
+          label,
+          confidence: 'partially_verified',
+        });
+        const end = toExtracted(parts, 'hackathon_end', parts.text, 'partially_verified', label);
+        results.push(end);
+        continue;
+      }
+    }
 
     let label: string | null = null;
     let info = classifyLabel(beforeText);
@@ -594,6 +642,51 @@ const MONTH_LABEL = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+export interface SourceWallClock {
+  /** e.g. "27 September 2026, 11:59 PM" — the organizer's own wall clock. */
+  main: string;
+  /** e.g. "IST" — friendly label, never a bare invented abbreviation. */
+  timezoneLabel: string | null;
+  timeNotSpecified: boolean;
+}
+
+/**
+ * Render an ISO value in the SOURCE's wall clock, derived from its own UTC
+ * offset — never converted to the viewer's zone, never UTC-normalized.
+ * A bare date renders without a time rather than an invented one.
+ */
+export function formatSourceWallClock(iso: string | null, sourceTimezone: string | null): SourceWallClock {
+  if (!iso) return { main: 'Not specified', timezoneLabel: null, timeNotSpecified: true };
+  if (guessPrecision(iso) === 'date_only') {
+    const [y, m, d] = iso.split('-').map(Number);
+    if (!y || !m || !d) return { main: 'Not specified', timezoneLabel: null, timeNotSpecified: true };
+    return { main: `${d} ${MONTH_LABEL[m - 1]} ${y} — time not specified`, timezoneLabel: sourceTimezone, timeNotSpecified: true };
+  }
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return { main: 'Not specified', timezoneLabel: null, timeNotSpecified: true };
+  const off = /([+-])(\d{2}):?(\d{2})$/.exec(iso.trim());
+  const offsetMinutes = off ? (off[1] === '-' ? -1 : 1) * (Number(off[2]) * 60 + Number(off[3])) : null;
+  const shifted = offsetMinutes === null ? instant : new Date(instant.getTime() + offsetMinutes * 60_000);
+  const d = shifted.getUTCDate();
+  const mo = shifted.getUTCMonth();
+  const y = shifted.getUTCFullYear();
+  let hh = shifted.getUTCHours();
+  const mm = shifted.getUTCMinutes();
+  const suffix = hh >= 12 ? 'PM' : 'AM';
+  hh = hh % 12 === 0 ? 12 : hh % 12;
+  let tzLabel = sourceTimezone;
+  if (!tzLabel || /^UTC[+-]\d{2}:?\d{2}$/.test(tzLabel)) {
+    // +05:30 year-round is India/Sri Lanka; anything else keeps its UTC form
+    // rather than risking a wrong abbreviation.
+    tzLabel = offsetMinutes === 330 ? 'IST' : offsetMinutes === 0 ? 'UTC' : tzLabel;
+  }
+  return {
+    main: `${d} ${MONTH_LABEL[mo]} ${y}, ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} ${suffix}`,
+    timezoneLabel: tzLabel,
+    timeNotSpecified: false,
+  };
+}
 
 export interface FormatOptions {
   /** Timezone to render in. Defaults to the source timezone when known. */

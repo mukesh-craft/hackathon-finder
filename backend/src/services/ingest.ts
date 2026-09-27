@@ -221,6 +221,14 @@ export class IngestService {
     const merged: Record<string, unknown> = {};
     let deadlineConflict: DeadlineConflict | null = null;
     const fieldConflicts: DeadlineConflict[] = [];
+    // Conflicts the adapter found inside its own source (structured field vs
+    // description text) travel with the record; dedupe keeps re-ingests clean.
+    for (const c of record.fieldConflicts ?? []) {
+      const key = JSON.stringify([c.field, c.values.map((v) => v.value).sort()]);
+      if (!fieldConflicts.some((e) => JSON.stringify([e.field, e.values.map((v) => v.value).sort()]) === key)) {
+        fieldConflicts.push(c);
+      }
+    }
 
     const toConflict = (field: string, result: { reports: Array<{ source: SourceId; value: string; sourceUrl: string }> }, note: string): DeadlineConflict => ({
       field,

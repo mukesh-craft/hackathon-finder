@@ -154,6 +154,11 @@ export function Details() {
 
       <section className="panel" aria-labelledby="timeline-heading">
         <h2 id="timeline-heading">Timeline</h2>
+        {eventDateConflicts(h).map((c, i) => (
+          <p key={i} className="conflict-note" role="alert">
+            {c}
+          </p>
+        ))}
         <ol className="timeline">
           {TIMELINE.map(({ label, key }) => {
             const value = h[key];
@@ -234,6 +239,22 @@ function provenanceFor(
   if (matches.length === 0) return null;
   matches.sort((a, b) => (rank[b.confidence] ?? 0) - (rank[a.confidence] ?? 0));
   return { source: matches[0].source, confidence: matches[0].confidence };
+}
+
+/**
+ * Plain-language notes for event-date disagreements (structured field vs the
+ * organizer's own description text). Registration conflicts have their own
+ * banner; these cover hackathon_start/hackathon_end only.
+ */
+function eventDateConflicts(h: Hackathon): string[] {
+  const out: string[] = [];
+  for (const c of h.fieldConflicts ?? []) {
+    if (c.field !== 'hackathon_start' && c.field !== 'hackathon_end') continue;
+    const what = c.field === 'hackathon_start' ? 'start' : 'end';
+    const values = c.values.map((v) => v.value).join(' vs ');
+    out.push(`The event ${what} differs between sources (${values}). The structured date is shown — verify on the official page.`);
+  }
+  return out;
 }
 
 function renderTimelineValue(iso: string): string {  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
