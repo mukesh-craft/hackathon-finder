@@ -1,0 +1,40 @@
+# Netlify — frontend-only hosting for the Hackathon Finder.
+#
+# The backend (API + database + crawlers) stays on Render. Netlify serves the
+# static SPA and transparently proxies /api/* to it, so the frontend code
+# keeps calling same-origin paths and nothing else changes.
+#
+# Deploy: Netlify dashboard → Add new site → Import from GitHub →
+# select mukesh-craft/hackathon-finder. Netlify reads this file automatically:
+# build command, publish directory and redirect rules below. No card needed.
+#
+# After the first deploy, set the site URL wherever the public address lives.
+# (Backend PUBLIC_BASE_URL on Render should match this site's URL so sitemap
+# and share cards point here.)
+
+[build]
+  command = "npm install && npm run build -w shared && npm run build -w frontend"
+  publish = "frontend/dist"
+
+# API proxy MUST come first: /api/* goes to Render, everything else is the SPA.
+[[redirects]]
+  from = "/api/*"
+  to = "https://hackathon-finder-w9gh.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# SEO metadata routes also live on the backend — proxy them through as well so
+# crawlers and share unfurlers get full HTML on this domain too.
+[[redirects]]
+  from = "/seo/*"
+  to = "https://hackathon-finder-w9gh.onrender.com/seo/:splat"
+  status = 200
+  force = true
+
+# SPA fallback: client-side routes (/hackathons/chennai, /saved, …) all serve
+# the app shell. The app boots from it; the server pre-rendering on Render
+# stays as the fallback for direct API-domain visits.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
