@@ -13,3 +13,5 @@ createRoot(root).render(
     </BrowserRouter>
   </StrictMode>,
 );
+// Signal the boot reporter in index.html: the app is alive, stand down.
+(window as unknown as { __appBooted?: boolean }).__appBooted = true;

@@ -9,11 +9,40 @@
   </head>
   <body>
     <div id="root">
-      <div style="max-width:480px;margin:0 auto;padding:3rem 1.5rem;text-align:center;font-family:system-ui,sans-serif;color:#f5efe6;background:#14100c;min-height:100vh">
+      <div id="boot-fallback" style="max-width:480px;margin:0 auto;padding:3rem 1.5rem;text-align:center;font-family:system-ui,sans-serif;color:#f5efe6;background:#14100c;min-height:100vh">
         <p style="font-size:1.1rem;font-weight:700">Loading Hackathon Finder…</p>
-        <p style="font-size:0.9rem;opacity:0.75">If this message stays, JavaScript is disabled or failed to load — check your connection and reload.</p>
+        <p id="boot-status" style="font-size:0.9rem;opacity:0.75">If this message stays, JavaScript is disabled or failed to load — check your connection and reload.</p>
       </div>
     </div>
+    <noscript>
+      <div style="max-width:480px;margin:0 auto;padding:3rem 1.5rem;text-align:center;font-family:system-ui,sans-serif">Hackathon Finder needs JavaScript enabled to run. Please enable it and reload.</div>
+    </noscript>
+    <script>
+      // Boot reporter: if the app bundle fails (network cut, old browser,
+      // uncaught module error), replace the vague spinner with the real cause.
+      (function () {
+        function show(msg) {
+          var el = document.getElementById('boot-status');
+          if (el) {
+            el.style.opacity = '1';
+            el.textContent = 'Could not start the app: ' + msg + ' — reload to retry.';
+          }
+        }
+        window.addEventListener(
+          'error',
+          function (e) {
+            if (!window.__appBooted && e && e.message) show(String(e.message).slice(0, 160));
+          },
+          true
+        );
+        window.addEventListener('unhandledrejection', function (e) {
+          if (!window.__appBooted) show('a resource failed to load');
+        });
+        setTimeout(function () {
+          if (!window.__appBooted) show('still loading after 25 seconds — the connection may be too slow');
+        }, 25000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
