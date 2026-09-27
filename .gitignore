@@ -17,3 +17,6 @@ workers/dist/
 *.log
 coverage/
 .DS_Store
+
+# TypeScript build info
+*.tsbuildinfo
