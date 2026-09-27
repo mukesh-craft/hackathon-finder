@@ -1,0 +1,6 @@
+# Netlify redirect rules — bundled into dist via frontend/public.
+# Order matters: API/SEO proxy first, SPA fallback last.
+# (Mirrors netlify.toml so manual API deploys behave identically to git deploys.)
+/api/*  https://hackathon-finder-w9gh.onrender.com/api/:splat  200
+/seo/*  https://hackathon-finder-w9gh.onrender.com/seo/:splat  200
+/*  /index.html  200

@@ -11,6 +11,7 @@
  * from many cloud/hosting IP ranges, which is why it is not the default here.
  */
 import type { Db } from '../db/client.js';
+import { toJsonb } from '../db/json.js';
 import { config } from '../config.js';
 import { safeFetchJson } from '../http/safe-fetch.js';
 import { isValidLatLon } from '@hf/shared';
@@ -107,7 +108,7 @@ export class Geocoder {
     if (!best) {
       await this.db.query(
         'INSERT INTO geocode_cache (cache_key, provider, display_name, raw) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
-        [key, config.geocoder.provider, null, JSON.stringify({ query: trimmed, features: [] })],
+        [key, config.geocoder.provider, null, toJsonb({ query: trimmed, features: [] })],
       );
       return null;
     }
@@ -128,7 +129,7 @@ export class Geocoder {
         `${best.properties?.name ?? trimmed}, ${best.properties?.state ?? ''}, ${best.properties?.country ?? ''}`.replace(/,\s*,/g, ','),
         lat,
         lon,
-        JSON.stringify(best),
+        toJsonb(best),
       ],
     );
 

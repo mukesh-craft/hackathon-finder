@@ -45,15 +45,25 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   let res: Response;
+  const controller = new AbortController();
+  const timer = init?.timeoutMs ? setTimeout(() => controller.abort(), init.timeoutMs) : null;
   try {
     res = await fetch(path, {
       ...init,
+      signal: init?.signal ?? controller.signal,
       headers: { accept: 'application/json', ...(init?.headers ?? {}) },
     });
-  } catch {
+  } catch (err) {
+    // NOTE: no instanceof check — abort rejections are DOMExceptions, which do
+    // not inherit from Error, so only the name is reliable.
+    if ((err as { name?: string } | null)?.name === 'AbortError' && init?.timeoutMs) {
+      throw new ApiError(0, 'waking_up', 'The server is waking up (cold start can take a minute). Wait a little and try again.');
+    }
     throw new ApiError(0, 'network_error', 'Could not reach the server. Check your connection and try again.');
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   if (!res.ok) {
     let code = 'request_failed';
@@ -118,7 +128,7 @@ export interface RefreshResponse {
 
 /** Ask the server for a fresh crawl. Interval-guarded, background, never blocking. */
 export function requestRefresh(): Promise<RefreshResponse> {
-  return request<RefreshResponse>('/api/refresh', { method: 'POST' });
+  return request<RefreshResponse>('/api/refresh', { method: 'POST', timeoutMs: 25_000 });
 }
 
 export function listCities(limit = 60): Promise<{ count: number; cities: CitySummary[]; popular: string[] }> {

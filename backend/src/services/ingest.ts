@@ -31,6 +31,7 @@ import {
 } from '@hf/shared';
 import type { Db } from '../db/client.js';
 import { newId } from '../db/client.js';
+import { toJsonb } from '../db/json.js';
 import { CityService } from './cities.js';
 import { computeDataQuality, nextVerificationAt } from './quality.js';
 import type { AdapterLogger } from '../adapters/types.js';
@@ -431,8 +432,8 @@ export class IngestService {
       registration_fee_currency: (merged.registration_fee_currency as string | null) ?? record.registrationFeeCurrency ?? null,
       data_quality: quality.dataQuality,
       deadline_conflict: deadlineConflict !== null,
-      deadline_conflict_detail: deadlineConflict,
-      field_conflicts: fieldConflicts.length > 0 ? fieldConflicts : null,
+      deadline_conflict_detail: toJsonb(deadlineConflict),
+      field_conflicts: fieldConflicts.length > 0 ? toJsonb(fieldConflicts) : null,
       source_deadline_text: record.sourceDeadlineText ?? null,
       last_verified_at: now.toISOString(),
       next_verification_at: nextCheck.toISOString(),
@@ -498,8 +499,8 @@ export class IngestService {
         record.source === row.source,
         'ok',
         new Date().toISOString(),
-        JSON.stringify(snapshotOf(record)),
-        JSON.stringify(record.raw ?? null),
+        toJsonb(snapshotOf(record)),
+        toJsonb(record.raw ?? null),
       ],
     );
 

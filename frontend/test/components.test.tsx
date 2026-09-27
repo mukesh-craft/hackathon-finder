@@ -60,6 +60,7 @@ function hackathon(over: Partial<Hackathon> = {}): Hackathon {
     dataQuality: 'verified',
     deadlineConflict: false,
     deadlineConflictDetail: null,
+    fieldConflicts: null,
     sourceDeadlineText: '2026-09-29T23:59:00+05:30',
     lastVerifiedAt: '2026-09-26T00:00:00.000Z',
     nextVerificationAt: null,
@@ -632,7 +633,7 @@ describe('Details timeline provenance', () => {
             resultAnnouncement: null, teamSizeMin: 1, teamSizeMax: 4, eligibility: null,
             themes: [], technologies: [], prizeAmount: null, prizeCurrency: null, prizeDetails: null,
             freeOrPaid: 'unknown', registrationFee: null, registrationFeeCurrency: null,
-            dataQuality: 'verified', deadlineConflict: false, deadlineConflictDetail: null,
+            dataQuality: 'verified', deadlineConflict: false, deadlineConflictDetail: null, fieldConflicts: null,
             sourceDeadlineText: null, lastVerifiedAt: new Date().toISOString(), nextVerificationAt: null,
             updatedAt: new Date().toISOString(), distanceKm: null, sources: [], provenance: [],
             fieldConflicts: [
@@ -688,5 +689,28 @@ describe('ErrorBoundary', () => {
     expect(screen.getByRole('button', { name: /reload the page/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to search/i })).toBeInTheDocument();
     consoleSpy.mockRestore();
+  });
+});
+
+describe('requestRefresh', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('reports waking_up instead of a generic failure on cold-start timeouts', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: unknown, init?: RequestInit) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      })) as unknown as typeof fetch,
+    );
+    const { requestRefresh } = await import('../src/api.js');
+    const pending = expect(requestRefresh()).rejects.toMatchObject({ code: 'waking_up' });
+    await vi.advanceTimersByTimeAsync(25_000);
+    await pending;
   });
 });
