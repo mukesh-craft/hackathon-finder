@@ -659,3 +659,22 @@ describe('Details timeline provenance', () => {
     expect(screen.getByText('via unstop · source confirmed')).toBeInTheDocument();
   });
 });
+
+describe('ErrorBoundary', () => {
+  it('shows a recovery page instead of a blank screen on render crash', async () => {
+    const { ErrorBoundary } = await import('../src/components/ErrorBoundary.js');
+    function Explodes(): React.JSX.Element {
+      throw new Error('boom');
+    }
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(
+      <ErrorBoundary>
+        <Explodes />
+      </ErrorBoundary>,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(/something went wrong/i);
+    expect(screen.getByRole('button', { name: /reload the page/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to search/i })).toBeInTheDocument();
+    consoleSpy.mockRestore();
+  });
+});

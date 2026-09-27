@@ -127,7 +127,9 @@ export async function buildServer(db: Db): Promise<FastifyInstance> {
 
     // Pure client-side routes: serve the SPA shell so deep links and refreshes
     // work. Every new frontend route must be added here or it 404s.
-    for (const path of ['/saved', '/health', '/admin']) {
+    // '/ai' is retired but kept so old tabs/bookmarks land in the app, where
+    // the client immediately redirects to Home.
+    for (const path of ['/saved', '/health', '/admin', '/ai']) {
       app.get(path, async (_req, reply) => sendShell(reply));
     }
   } else {
