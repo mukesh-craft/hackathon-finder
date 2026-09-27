@@ -252,6 +252,25 @@ describe('admin + seo', () => {
     expect(res.body).toContain('API Chennai Sprint');
   });
 
+  it('pre-renders real content into the home shell (works with JS disabled)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Find hackathons near you');
+    // Real event with a working link, not a loading spinner.
+    expect(res.body).toContain('API Chennai Sprint');
+    expect(res.body).toContain('/hackathon/');
+    // …while still booting the SPA when JS runs.
+    expect(res.body).toContain('type="module"');
+  });
+
+  it('pre-renders city results into the shell', async () => {
+    const res = await app.inject({ method: 'GET', url: '/hackathons/chennai?city=Chennai' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Hackathons in Chennai');
+    expect(res.body).toContain('API Chennai Sprint');
+    expect(res.body).toContain('type="module"');
+  });
+
   it('serves a sitemap and robots.txt', async () => {
     const sitemap = await app.inject({ method: 'GET', url: '/api/sitemap' });
     expect(sitemap.statusCode).toBe(200);

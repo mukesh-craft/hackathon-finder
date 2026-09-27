@@ -16,6 +16,7 @@ import type { Db } from '../db/client.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { registerApiRoutes } from './routes.js';
+import { injectIntoShell, renderCityContent, renderHomeContent } from './ssr.js';
 
 export async function buildServer(db: Db): Promise<FastifyInstance> {
   const app = Fastify({
@@ -114,11 +115,34 @@ export async function buildServer(db: Db): Promise<FastifyInstance> {
       },
     });
 
+    // Every page pre-renders its real content into the shell: readable and
+    // usable with JavaScript disabled, on old browsers, or when the bundle
+    // fails. React replaces this markup wholesale on boot (no hydration).
+    app.get('/', async (_req, reply) => {
+      try {
+        const shell = await readSpaIndex();
+        if (!shell) return reply.code(404).type('text/html; charset=utf-8').send(spaFallback());
+        return reply.type('text/html; charset=utf-8').send(injectIntoShell(shell, await renderHomeContent(db)));
+      } catch (err) {
+        logger.error('ssr home failed', { error: (err as Error).message });
+        return sendShell(reply);
+      }
+    });
+
     // Client-side routes fall through to the SPA shell, but indexable routes get
     // server-rendered metadata so crawlers do not have to run JavaScript.
     app.get('/hackathons/:city', async (req, reply) => {
       const { city } = req.params as { city: string };
-      return sendSeoOrShell(app, reply, `/seo/hackathons/${encodeURIComponent(city)}`);
+      const queryCity = (req.query as { city?: string } | undefined)?.city;
+      try {
+        const shell = await readSpaIndex();
+        if (!shell) return reply.code(404).type('text/html; charset=utf-8').send(spaFallback());
+        const rendered = await renderCityContent(db, city, queryCity);
+        return reply.type('text/html; charset=utf-8').send(injectIntoShell(shell, rendered.html));
+      } catch (err) {
+        logger.error('ssr city failed', { error: (err as Error).message });
+        return sendSeoOrShell(app, reply, `/seo/hackathons/${encodeURIComponent(city)}`);
+      }
     });
     app.get('/hackathon/:slug', async (req, reply) => {
       const { slug } = req.params as { slug: string };
