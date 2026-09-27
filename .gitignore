@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+
+# Local runtime data (database files, logs)
+.data/
+
+# Dependencies (reinstalled on Render via npm install)
+node_modules/
+
+# Build output (Render rebuilds via npm run build)
+frontend/dist/
+backend/dist/
+shared/dist/
+workers/dist/
+
+# Logs, coverage, OS noise
+*.log
+coverage/
+.DS_Store

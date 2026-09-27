@@ -1,0 +1,135 @@
+{
+ "hackathons": [
+  {
+   "id": 29969,
+   "title": "RevenueCat Shipaton 2026",
+   "displayed_location": {
+    "icon": "globe",
+    "location": "Online"
+   },
+   "open_state": "open",
+   "thumbnail_url": "//d112y698adiu2z.cloudfront.net/photos/production/challenge_thumbnails/004/663/632/datas/medium_square.jpg",
+   "analytics_identifier": "RevenueCat Shipaton 2026 (29969)",
+   "url": "https://revenuecat-shipaton-2026.devpost.com/",
+   "time_left_to_submission": "5 days left",
+   "submission_period_dates": "Jul 31 - Oct 01, 2026",
+   "themes": [
+    {
+     "id": 18,
+     "name": "Design"
+    },
+    {
+     "id": 4,
+     "name": "Gaming"
+    },
+    {
+     "id": 26,
+     "name": "Mobile"
+    }
+   ],
+   "prize_amount": "$<span data-currency-value>740,000</span>",
+   "prizes_counts": {
+    "cash": 1,
+    "other": 0
+   },
+   "registrations_count": 27640,
+   "featured": true,
+   "organization_name": "RevenueCat",
+   "winners_announced": false,
+   "submission_gallery_url": "https://revenuecat-shipaton-2026.devpost.com/project-gallery",
+   "start_a_submission_url": "https://revenuecat-shipaton-2026.devpost.com/challenges/start_a_submission",
+   "invite_only": false,
+   "eligibility_requirement_invite_only_description": null,
+   "managed_by_devpost_badge": false
+  },
+  {
+   "id": 30992,
+   "title": "Build, Ship, Shape: Amazon Developer Hackathon",
+   "displayed_location": {
+    "icon": "globe",
+    "location": "Online"
+   },
+   "open_state": "open",
+   "thumbnail_url": "//d112y698adiu2z.cloudfront.net/photos/production/challenge_thumbnails/005/173/047/datas/medium_square.png",
+   "analytics_identifier": "Build, Ship, Shape: Amazon Developer Hackathon (30992)",
+   "url": "https://amazonappdev2026.devpost.com/",
+   "time_left_to_submission": "27 days left",
+   "submission_period_dates": "Aug 31 - Oct 23, 2026",
+   "themes": [
+    {
+     "id": 6,
+     "name": "Machine Learning/AI"
+    },
+    {
+     "id": 22,
+     "name": "Open Ended"
+    },
+    {
+     "id": 11,
+     "name": "Productivity"
+    }
+   ],
+   "prize_amount": "$<span data-currency-value>138,000</span>",
+   "prizes_counts": {
+    "cash": 12,
+    "other": 0
+   },
+   "registrations_count": 14941,
+   "featured": true,
+   "organization_name": "Amazon",
+   "winners_announced": false,
+   "submission_gallery_url": "https://amazonappdev2026.devpost.com/project-gallery",
+   "start_a_submission_url": "https://amazonappdev2026.devpost.com/challenges/start_a_submission",
+   "invite_only": false,
+   "eligibility_requirement_invite_only_description": null,
+   "managed_by_devpost_badge": true
+  },
+  {
+   "id": 30790,
+   "title": "Nebius x NVIDIA Global AI Hackathon",
+   "displayed_location": {
+    "icon": "globe",
+    "location": "Online"
+   },
+   "open_state": "open",
+   "thumbnail_url": "//d112y698adiu2z.cloudfront.net/photos/production/challenge_thumbnails/005/173/025/datas/medium_square.png",
+   "analytics_identifier": "Nebius x NVIDIA Global AI Hackathon (30790)",
+   "url": "https://nebiusglobalaihackathon.devpost.com/",
+   "time_left_to_submission": "about 1 month left",
+   "submission_period_dates": "Aug 26 - Oct 30, 2026",
+   "themes": [
+    {
+     "id": 6,
+     "name": "Machine Learning/AI"
+    },
+    {
+     "id": 23,
+     "name": "Beginner Friendly"
+    },
+    {
+     "id": 27,
+     "name": "Robotic Process Automation"
+    }
+   ],
+   "prize_amount": "$<span data-currency-value>50,000</span>",
+   "prizes_counts": {
+    "cash": 1,
+    "other": 0
+   },
+   "registrations_count": 12233,
+   "featured": true,
+   "organization_name": "nebius",
+   "winners_announced": false,
+   "submission_gallery_url": "https://nebiusglobalaihackathon.devpost.com/project-gallery",
+   "start_a_submission_url": "https://nebiusglobalaihackathon.devpost.com/challenges/start_a_submission",
+   "invite_only": false,
+   "eligibility_requirement_invite_only_description": null,
+   "managed_by_devpost_badge": true
+  }
+ ],
+ "meta": {
+  "total_count": 13956,
+  "per_page": 9,
+  "fuzzy": false
+ }
+}

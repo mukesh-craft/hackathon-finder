@@ -1,0 +1,47 @@
+# Render Blueprint — free hosting for the Hackathon Finder.
+#
+# What this creates (all on Render's free tier, no card):
+#   - hackathon-finder web service (Node, Singapore, 512 MB, sleeps when idle)
+#
+# Database: use a permanent free Neon Postgres (0.5 GB, never expires, no
+# card). Create it at neon.tech, then set DATABASE_URL on the web service to
+# Neon's connection string. (Render's own free Postgres deletes itself after
+# 30 days, so it is intentionally NOT in this file.)
+#
+# Deploy: push this repo to GitHub, then Dashboard → New → Blueprint, point at
+# the repo, set DATABASE_URL + PUBLIC_BASE_URL, deploy. First boot auto-seeds
+# an empty database (INGEST_ON_BOOT below). Full steps: docs/DEPLOYMENT.md.
+
+services:
+  - type: web
+    name: hackathon-finder
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PUBLIC_BASE_URL
+        value: https://hackathon-finder.onrender.com
+      - key: REFRESH_ENABLED
+        value: true
+      - key: INGEST_ON_BOOT
+        value: true
+      - key: DEVPOST_MAX_DETAIL_FETCHES
+        value: 150
+      - key: HTTP_PER_HOST_DELAY_MS
+        value: 1500
+      - key: GEOCODER_MIN_INTERVAL_MS
+        value: 1500
+      # Paste your Neon connection string in the dashboard after deploy
+      # (or uncomment and use Render secrets — value stays out of git):
+      # - key: DATABASE_URL
+      #   sync: false
+      - key: ADMIN_TOKEN
+        generateValue: true
