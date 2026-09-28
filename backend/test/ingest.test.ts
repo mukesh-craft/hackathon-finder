@@ -182,8 +182,7 @@ describe('ingest — merge across sources', () => {
     expect(rows.rows[0].description).toBe('updated description');
   });
 
-  it('carries adapter-found field conflicts through to the stored row', async () => {
-    const db = testDb();
+  it('carries adapter-found field conflicts through to the stored row', async () => {    const db = testDb();
     const svc = new IngestService(db, { logger: silentLogger });
     await svc.ingest(
       base({
@@ -237,5 +236,35 @@ describe('ingest — merge across sources', () => {
       ['Clash Fest'],
     );
     expect(again.rows[0].field_conflicts?.filter((c) => c.field === 'hackathon_end').length).toBe(1);
+  });
+});
+
+describe('ingest — slug races', () => {
+  it('keeps both rows when concurrent crawls claim the same slug', async () => {
+    const db = testDb();
+    const svc = new IngestService(db, { logger: silentLogger });
+    const a = base({
+      title: 'Same Name Fest',
+      source: 'unstop',
+      sourceRecordId: 'race-a',
+      organizer: 'Alpha College',
+      city: 'Chennai',
+      country: 'India',
+    });
+    const b = base({
+      title: 'Same Name Fest!',
+      source: 'devpost',
+      sourceRecordId: 'race-b',
+      organizer: 'Beta College',
+      city: 'Pune',
+      country: 'India',
+    });
+    // Same slug base ("same-name-fest"), different events, same instant.
+    await Promise.all([svc.ingest(a), svc.ingest(b)]);
+    const rows = await db.query<{ slug: string }>(
+      "SELECT slug FROM hackathons WHERE title LIKE 'Same Name Fest%' ORDER BY slug",
+    );
+    expect(rows.rows.length).toBe(2);
+    expect(new Set(rows.rows.map((r) => r.slug)).size).toBe(2);
   });
 });

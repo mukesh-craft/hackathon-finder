@@ -232,6 +232,11 @@ describe('admin + seo', () => {
     expect(typeof res.json().reason).toBe('string');
   });
 
+  it('rejects disallowed origins with 403, not a 500', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/refresh', headers: { origin: 'https://evil.example.com' } });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('lists known sources and their collection policy', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/admin/sources' });
     const ids = res.json().sources.map((s: { id: string }) => s.id);

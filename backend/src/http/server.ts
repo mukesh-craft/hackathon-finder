@@ -56,7 +56,9 @@ export async function buildServer(db: Db): Promise<FastifyInstance> {
       if (!origin) return cb(null, true);
       if (config.corsOrigins.includes(origin)) return cb(null, true);
       if (!config.isProduction && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) return cb(null, true);
-      return cb(new Error('origin not allowed'), false);
+      // 403, not 500: a rejected origin is a policy decision, not a crash.
+      // The message names no internals.
+      return cb(Object.assign(new Error('origin not allowed'), { statusCode: 403 }), false);
     },
     credentials: false,
     methods: ['GET', 'POST', 'OPTIONS'],

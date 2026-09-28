@@ -450,6 +450,34 @@ export class IngestService {
 
   // -------------------------------------------------------------------------
 
+  /**
+   * Insert with a retry on slug races. Two concurrent crawls (scheduled +
+   * visit-triggered) can generate the same slug for two different events
+   * between the existence check and the insert; instead of dropping the
+   * record, suffix once and retry. Bounded: exactly one retry, then throw.
+   */
+  private async insertHackathonRow(
+    row: Record<string, unknown>,
+    columns: string[],
+    placeholders: string[],
+    updates: string[],
+  ): Promise<void> {
+    const run = () =>
+      this.db.query(
+        `INSERT INTO hackathons (${columns.join(', ')}) VALUES (${placeholders.join(', ')})
+         ON CONFLICT (id) DO UPDATE SET ${updates.join(', ')}`,
+        columns.map((c) => row[c]),
+      );
+    try {
+      await run();
+    } catch (err) {
+      if (!isSlugConflict(err)) throw err;
+      row.slug = `${row.slug}-${Math.random().toString(36).slice(2, 8)}`;
+      this.opts.logger.warn('slug collision, retrying with suffix', { slug: row.slug });
+      await run();
+    }
+  }
+
   private async persist(
     row: Record<string, unknown>,
     record: RawHackathon,
@@ -462,11 +490,7 @@ export class IngestService {
       .filter((c) => c !== 'id' && c !== 'slug' && c !== 'first_seen_at')
       .map((c) => `${c} = EXCLUDED.${c}`);
 
-    await this.db.query(
-      `INSERT INTO hackathons (${columns.join(', ')}) VALUES (${placeholders.join(', ')})
-       ON CONFLICT (id) DO UPDATE SET ${updates.join(', ')}`,
-      columns.map((c) => row[c]),
-    );
+    await this.insertHackathonRow(row, columns, placeholders, updates);
 
     // Per-source link, so a merged event keeps every original listing.
     await this.db.query(
@@ -680,6 +704,14 @@ function unionList(a: string[] | undefined, b: string[] | undefined): string[] {
  * malformed) becomes null so a hostile ingested value can never become a
  * clickable link in the UI.
  */
+/** True for a slug unique-violation (Postgres 23505), on either driver. */
+function isSlugConflict(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const code = (err as { code?: unknown }).code;
+  const message = err instanceof Error ? err.message : String(err);
+  return code === '23505' || message.includes('hackathons_slug_key');
+}
+
 function sanitizeHttpUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
