@@ -359,15 +359,17 @@ export function partsToIso(parts: ParsedDateParts, opts: ParseOptions = {}): str
   const pad = (n: number) => String(n).padStart(2, '0');
   const date = `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
   if (parts.hour === null) return date;
-  const time = `${pad(parts.hour)}:${pad(parts.minute ?? 0)}`;
+  // Seconds are preserved when the source stated them — zeroing them rewrites
+  // the organizer's published instant (e.g. Unstop's 12:00:35 deadlines).
+  const time = `${pad(parts.hour)}:${pad(parts.minute ?? 0)}:${pad(parts.second ?? 0)}`;
   if (parts.offsetMinutes === null) {
     // Time present but no zone anywhere: render a floating local time. The
     // consumer must treat it as "no timezone stated" rather than assuming UTC.
-    return `${date}T${time}:00`;
+    return `${date}T${time}`;
   }
   const sign = parts.offsetMinutes < 0 ? '-' : '+';
   const abs = Math.abs(parts.offsetMinutes);
-  return `${date}T${time}:00${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  return `${date}T${time}${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
 }
 
 /** Parse a single loose date string. Returns null when nothing date-like is present. */

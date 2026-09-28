@@ -129,35 +129,38 @@ describe('e2e — real city search', () => {
   });
 
   it('live spot-check: the stored deadline matches Unstop right now', async () => {
-    // Fetch one open listing straight from Unstop and compare with our row.
+    // Fetch open listings straight from Unstop and compare with our rows.
     // Skipped (not failed) when the network or the source is unreachable.
-    let live: { data?: { data?: Array<{ id: number; title: string; regnRequirements?: { end_regn_dt?: string } }> } };
-    try {
-      const res = await fetch(
-        'https://unstop.com/api/public/opportunity/search-result?opportunity=hackathons&oppstatus=open&page=1&per_page=5',
-        { headers: { 'user-agent': 'HackathonFinderBot/1.0 e2e-spot-check', accept: 'application/json' }, signal: AbortSignal.timeout(20_000) },
-      );
-      if (!res.ok) return;
-      live = (await res.json()) as typeof live;
-    } catch {
-      return;
-    }
-    const items = live.data?.data ?? [];
-    if (items.length === 0) return;
-
+    // Pages 1-3 are scanned because a dev database ingested days ago may not
+    // overlap the current front page; production stays fresh via crawls.
     let compared = 0;
-    for (const item of items.slice(0, 5)) {
-      const expected = item.regnRequirements?.end_regn_dt;
-      if (!expected) continue;
-      const row = await db.query<{ registration_deadline: string | null }>(
-        `SELECT h.registration_deadline FROM hackathons h
-         JOIN hackathon_sources hs ON hs.hackathon_id = h.id
-         WHERE hs.source = 'unstop' AND hs.source_record_id = $1`,
-        [String(item.id)],
-      );
-      if (row.rows.length === 0) continue; // ingested after the spot-check sample; fine
-      expect(row.rows[0].registration_deadline, `live mismatch for "${item.title}"`).toBe(expected);
-      compared += 1;
+    for (let page = 1; page <= 3 && compared === 0; page += 1) {
+      let live: { data?: { data?: Array<{ id: number; title: string; regnRequirements?: { end_regn_dt?: string } }> } };
+      try {
+        const res = await fetch(
+          `https://unstop.com/api/public/opportunity/search-result?opportunity=hackathons&oppstatus=open&page=${page}&per_page=25`,
+          { headers: { 'user-agent': 'HackathonFinderBot/1.0 e2e-spot-check', accept: 'application/json' }, signal: AbortSignal.timeout(20_000) },
+        );
+        if (!res.ok) return;
+        live = (await res.json()) as typeof live;
+      } catch {
+        return;
+      }
+      const items = live.data?.data ?? [];
+      for (const item of items) {
+        const expected = item.regnRequirements?.end_regn_dt;
+        if (!expected) continue;
+        const row = await db.query<{ registration_deadline: string | null }>(
+          `SELECT h.registration_deadline FROM hackathons h
+           JOIN hackathon_sources hs ON hs.hackathon_id = h.id
+           WHERE hs.source = 'unstop' AND hs.source_record_id = $1`,
+          [String(item.id)],
+        );
+        if (row.rows.length === 0) continue;
+        expect(row.rows[0].registration_deadline, `live mismatch for "${item.title}"`).toBe(expected);
+        compared += 1;
+        if (compared >= 5) break;
+      }
     }
     // At least one direct comparison must succeed for the check to mean anything.
     expect(compared).toBeGreaterThan(0);

@@ -328,3 +328,15 @@ describe('formatSourceWallClock', () => {
     expect(f.timeNotSpecified).toBe(true);
   });
 });
+
+describe('partsToIso — seconds fidelity', () => {
+  it('preserves non-zero seconds the source stated', async () => {
+    const { parseDateExpression } = await import('../src/dates.js');
+    expect(parseDateExpression('2026-10-08T12:00:35+05:30')?.iso).toBe('2026-10-08T12:00:35+05:30');
+  });
+
+  it('emits :00 only when the source gave no seconds', async () => {
+    const { parseDateExpression } = await import('../src/dates.js');
+    expect(parseDateExpression('29 Sep 2026, 11:59 PM IST')?.iso).toBe('2026-09-29T23:59:00+05:30');
+  });
+});
